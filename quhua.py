@@ -1,97 +1,96 @@
-# coding=utf8
+#coding=utf8
+
+import xlrd
 
 
-import xlwt
+class Area():
+    def __init__(self, id, name):
+        self.id = id
+        self.name = name
+        self.citys = []
 
 
-s = open("quhua.txt").read()
+class City():
+    def __init__(self, id, name):
+        self.id = id
+        self.name = name
+        self.countys = []
 
-s = s.replace("\xef\xbb\xbf", "")
-s = s.replace("\r", "")
-s = s.decode("utf8").encode("gbk")
-
-
-area_array = [None for i in range(9999)]
-sub_array = [None for i in range(9999)]
-l_arr = [None for i in range(9999)]
-sub_arr = [None for i in range(9999)]
-
-for line in s.split("\n"):
-    if "var" in line:
-        continue
-    if u"请选择".encode("gbk") in line:
-        continue
-    if "=[]" in line:
-        if "sub_arr[" in line:
-            line = line.replace("=[]", "=[None for i in range(999999)]")
-        elif "sub_array[" in line:
-            line = line.replace("=[]", "=[None for i in range(9999)]")      
-    print line
-    exec(line)
+        
+class County():
+    def __init__(self, id, name):
+        self.id = id
+        self.name = name
 
 
+workbook = xlrd.open_workbook('quhua.xls')
 
+sheet0 = workbook.sheet_by_index(0)
+sheet1 = workbook.sheet_by_index(1)
+sheet2 = workbook.sheet_by_index(2)
 
-workBook = xlwt.Workbook()
-workBook.add_sheet(u"省")
-workBook.add_sheet(u"市")
-workBook.add_sheet(u"县")
-sheet0 = workBook.get_sheet(0)
-sheet1 = workBook.get_sheet(1)
-sheet2 = workBook.get_sheet(2)
+areas = []
+unkown_countys = []
 
+for i in range(sheet0.nrows):
+    id = str(int(sheet0.cell(i, 0).value))
+    name = sheet0.cell(i, 2).value.encode("utf8").strip()
+    area = Area(id, name)
+    areas.append(area)
 
-print u"生成省表数据".encode("gbk")
+for i in range(sheet1.nrows):
+    id = str(int(sheet1.cell(i, 0).value))
+    name = sheet1.cell(i, 1).value.encode("utf8").strip()
+    area_id = id[:2]
+    city = City(id, name)
+    for area in areas:
+        if area.id == area_id:
+            area.citys.append(city)
 
-n = 0
-for i in range(len(area_array)):
-    area = area_array[i]
-    if not area:
-        continue
-    print area
-    sheet0.write(n, 0, str(i))
-    sheet0.write(n, 1, "000")
-    sheet0.write(n, 2, area.decode("gbk"))
-    n += 1
+for i in range(sheet2.nrows):
+    id = str(int(sheet2.cell(i, 0).value))
+    name = sheet2.cell(i, 1).value.encode("utf8").strip()
+    city_id = str(int(sheet2.cell(i, 2).value))
+    area_id = id[:2]
+    county = County(id, name)
+    flag = False
+    for area in areas:
+        if area.id == area_id:
+            for city in area.citys:
+                if city.id == city_id:
+                    flag = True
+                    city.countys.append(county)
+    if not flag:
+        unkown_countys.append(county)
 
+lines = []
 
-print u"生成市表数据".encode("gbk")
+lines.append("var area_array=[];")
+lines.append("var sub_array=[];")
+lines.append('area_array[0] = "请选择";')
 
-n = 0
-for i in range(len(sub_array)):
-    if not sub_array[i]:
-        continue
-    for j in range(len(sub_array[i])):
-        city = sub_array[i][j]
-        if not city:
-            continue
-        print city
-        city = city + str(i)[-1:]
-        sheet1.write(n, 0, str(j))
-        sheet1.write(n, 1, city.decode("gbk"))
-        n += 1
+for area in areas:
+    lines.append('area_array[%s]="%s";' % (area.id, area.name))
+    lines.append('sub_array[%s]=[];' % area.id)
+    lines.append('sub_array[%s][0]="请选择";' % area.id)
+    for city in area.citys:
+        lines.append('sub_array[%s][%s]="%s";' % (area.id, city.id, city.name))
 
+lines.append("var l_arr=[];")
+lines.append("var sub_arr=[];")
 
-print u"生成县表数据".encode("gbk")
+for area in areas:
+    for city in area.citys:
+        lines.append('l_arr[%s]="%s";' % (city.id, city.name))
+        lines.append('sub_arr[%s]=[];' % city.id)
+        lines.append('sub_arr[%s][0]="请选择";' % city.id)
+        for county  in city.countys:
+            lines.append('sub_arr[%s][%s]="%s";' % (city.id, county.id, county.name))
 
-n = 0
-for i in range(len(l_arr)):
-    city = l_arr[i]
-    if not city:
-        continue
-    print "===============", city, "==============="
-    for j in range(len(sub_arr[i])):
-        county = sub_arr[i][j]
-        if not county:
-            continue
-        print county
-        sheet2.write(n, 0, str(j))
-        sheet2.write(n, 1, county.decode("gbk"))
-        sheet2.write(n, 2, str(i))
-        sheet2.write(n, 3, city.decode("gbk"))
-        n += 1
+for county in unkown_countys:
+    lines.append('sub_arr[%s][%s]="%s";' % (county.id[:4], county.id, county.name))
 
-workBook.save("quhua.xls")
+output = "\r\n".join(lines)
+open("quhua_output.txt", "w").write(output)
 
-
-raw_input("OK!")
+print "OK!"
